@@ -1,41 +1,30 @@
 extern crate reqwest;
+extern crate rusoto_core;
+extern crate rusoto_route53;
 
-use reqwest::StatusCode;
-use std::net::Ipv4Addr;
+mod ip_finder;
+mod route_53_interface;
+
+use std::process;
 
 fn main() {
-    match get_ip_address() {
-        Ok(ip_address) => println!("{}", ip_address),
-        Err(text) => eprintln!("{}", text),
-    }
-}
+    let current_external_ip_address = match ip_finder::get_ip_address() {
+       Ok(ip_address) => ip_address,
+       Err(error_message) => {
+           eprintln!("{}", error_message);
+           process::exit(1);
+       }
+    };
 
-fn get_ip_address<'a>() -> Result<Ipv4Addr, &'a str> {
-    match reqwest::blocking::get("https://api.ipify.org") {
-        Ok(response) => match response.status() {
-            StatusCode::OK => match response.text() {
-                Ok(text) => string_to_ipv4(text),
-                Err(_) => Err("The response was not text"),
-            },
-            _ => Err("Status Code was not OK."),
+    let current_a_records = match route_53_interface::get_current_a_record() {
+        Ok(addresses) => addresses,
+        Err(error_message) => {
+            eprintln!("{}", error_message);
+            process::exit(1);
         },
-        Err(_) => Err("Request failed."),
+    };
+    println!("Current external ip address: {:?}", current_external_ip_address);
+    for address in current_a_records.iter() {
+        println!("A record address: {:?}", address);
     }
-}
-
-fn string_to_ipv4<'a>(ip_as_string: String) -> Result<Ipv4Addr, &'a str> {
-    let string_digits: Vec<&str> = ip_as_string.split(".").collect();
-    if string_digits.len() < 4 {
-        return Err("Not enough parts of IP address.");
-    }
-
-    let mut digits: Vec<u8> = Vec::new();
-    for string_digit in string_digits.iter() {
-        match string_digit.parse::<u8>() {
-            Ok(digit) => digits.push(digit),
-            Err(_) => return Err("Unable to parse IP address."),
-        }
-    }
-
-    Ok(Ipv4Addr::new(digits[0], digits[1], digits[2], digits[3]))
 }

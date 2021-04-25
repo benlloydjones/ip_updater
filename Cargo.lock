@@ -463,9 +463,12 @@ dependencies = [
 name = "ip_updater"
 version = "0.1.0"
 dependencies = [
+ "futures",
  "reqwest",
  "rusoto_core",
+ "rusoto_credential",
  "rusoto_route53",
+ "tokio",
 ]
 
 [[package]]
