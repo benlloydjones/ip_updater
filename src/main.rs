@@ -40,7 +40,7 @@ fn main() {
         current_external_ip_address,
         current_a_records[0],
     ) {
-        Ok(_) => println!("Update complete"),
+        Ok(_) => println!("Update complete.\n\nExiting process"),
         Err(error_message) => {
             eprintln!("{}", error_message);
             process::exit(1);
