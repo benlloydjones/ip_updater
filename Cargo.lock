@@ -465,6 +465,7 @@ version = "0.1.0"
 dependencies = [
  "futures",
  "openssl",
+ "openssl-probe",
  "reqwest",
  "rusoto_core",
  "rusoto_credential",

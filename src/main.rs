@@ -1,3 +1,4 @@
+extern crate openssl_probe;
 extern crate reqwest;
 extern crate rusoto_core;
 extern crate rusoto_credential;
@@ -9,12 +10,14 @@ mod route53_interface;
 use std::process;
 
 fn main() {
+    openssl_probe::init_ssl_cert_env_vars();
+
     let current_external_ip_address = match ip_finder::get_ip_address() {
-       Ok(ip_address) => ip_address,
-       Err(error_message) => {
-           eprintln!("{}", error_message);
-           process::exit(1);
-       }
+        Ok(ip_address) => ip_address,
+        Err(error_message) => {
+            eprintln!("{}", error_message);
+            process::exit(1);
+        }
     };
 
     let client = route53_interface::get_route_53_client();
@@ -24,7 +27,7 @@ fn main() {
         Err(error_message) => {
             eprintln!("{}", error_message);
             process::exit(1);
-        },
+        }
     };
 
     if vec![current_external_ip_address] == current_a_records {
