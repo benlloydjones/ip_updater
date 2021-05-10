@@ -4,7 +4,6 @@ use rusoto_route53::{
     Change, ChangeBatch, ChangeResourceRecordSetsRequest, ListResourceRecordSetsRequest,
     ResourceRecord, ResourceRecordSet, Route53, Route53Client,
 };
-use std::env;
 use std::error::Error;
 use std::net::Ipv4Addr;
 
@@ -16,11 +15,10 @@ enum RecordUpdateKind {
     DELETE,
 }
 
-fn get_list_resource_record_sets_request() -> Result<ListResourceRecordSetsRequest, Box<dyn Error>>
+fn get_list_resource_record_sets_request(hosted_zone_id: &String) -> Result<ListResourceRecordSetsRequest, Box<dyn Error>>
 {
-    let hosted_zone_id = env::var("IP_UPDATER_HOSTED_ZONE_ID")?;
     Ok(ListResourceRecordSetsRequest {
-        hosted_zone_id: hosted_zone_id,
+        hosted_zone_id: hosted_zone_id.clone(),
         max_items: None,
         start_record_identifier: None,
         start_record_name: None,
@@ -58,9 +56,9 @@ pub fn get_route_53_client() -> Route53Client {
 }
 
 #[tokio::main]
-pub async fn get_current_a_record(client: &Route53Client) -> Result<Vec<Ipv4Addr>, Box<dyn Error>> {
+pub async fn get_current_a_record(client: &Route53Client, hosted_zone_id: &String) -> Result<Vec<Ipv4Addr>, Box<dyn Error>> {
     let list_resource_record_sets_response =
-        Route53Client::list_resource_record_sets(client, get_list_resource_record_sets_request()?)
+        Route53Client::list_resource_record_sets(client, get_list_resource_record_sets_request(hosted_zone_id)?)
             .await?;
 
     Ok(get_current_a_record_addresses(
@@ -71,9 +69,9 @@ pub async fn get_current_a_record(client: &Route53Client) -> Result<Vec<Ipv4Addr
 fn get_update_a_record_request(
     ip_address: Ipv4Addr,
     action: RecordUpdateKind,
+    hosted_zone_id: &String,
+    name: &String,
 ) -> Result<ChangeResourceRecordSetsRequest, Box<dyn Error>> {
-    let name = env::var("IP_UPDATER_DOMAIN_NAME")?;
-    let hosted_zone_id = env::var("IP_UPDATER_HOSTED_ZONE_ID")?;
     let change_batch = ChangeBatch {
         changes: vec![Change {
             action: match action {
@@ -86,7 +84,7 @@ fn get_update_a_record_request(
                 geo_location: None,
                 health_check_id: None,
                 multi_value_answer: None,
-                name: name,
+                name: name.clone(),
                 region: None,
                 resource_records: Some(vec![ResourceRecord {
                     value: ip_address.to_string(),
@@ -102,7 +100,7 @@ fn get_update_a_record_request(
     };
     Ok(ChangeResourceRecordSetsRequest {
         change_batch: change_batch,
-        hosted_zone_id: hosted_zone_id,
+        hosted_zone_id: hosted_zone_id.clone(),
     })
 }
 
@@ -111,12 +109,14 @@ pub async fn update_a_records_on_route53(
     client: &Route53Client,
     new_ip_address: Ipv4Addr,
     old_ip_address: Ipv4Addr,
+    hosted_zone_id: &String,
+    name: &String,
 ) -> Result<(), Box<dyn Error>> {
     let delete_a_record_request =
-        get_update_a_record_request(old_ip_address, RecordUpdateKind::DELETE)?;
+        get_update_a_record_request(old_ip_address, RecordUpdateKind::DELETE, hosted_zone_id, name)?;
     Route53::change_resource_record_sets(client, delete_a_record_request).await?;
     let create_a_record_request =
-        get_update_a_record_request(new_ip_address, RecordUpdateKind::CREATE)?;
+        get_update_a_record_request(new_ip_address, RecordUpdateKind::CREATE, hosted_zone_id, name)?;
     Route53Client::change_resource_record_sets(client, create_a_record_request).await?;
     Ok(())
 }
