@@ -11,8 +11,6 @@ pub mod route53_interface;
 
 use std::process;
 
-use chrono;
-
 fn main() {
     openssl_probe::init_ssl_cert_env_vars();
     let now = chrono::Utc::now();
