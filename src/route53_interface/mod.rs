@@ -54,7 +54,7 @@ pub fn get_route_53_client() -> Route53Client {
 }
 
 #[tokio::main]
-pub async fn get_current_a_record(client: &Route53Client, hosted_zone_id: &String) -> Result<Vec<Ipv4Addr>, Box<dyn Error>> {
+async fn get_current_a_record(client: &Route53Client, hosted_zone_id: &String) -> Result<Vec<Ipv4Addr>, Box<dyn Error>> {
     let list_resource_record_sets_response =
         Route53Client::list_resource_record_sets(client, get_list_resource_record_sets_request(hosted_zone_id)?)
             .await?;

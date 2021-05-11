@@ -1,3 +1,4 @@
+extern crate chrono;
 extern crate openssl_probe;
 extern crate reqwest;
 extern crate rusoto_core;
@@ -10,13 +11,16 @@ pub mod route53_interface;
 
 use std::process;
 
+use chrono;
+
 fn main() {
     openssl_probe::init_ssl_cert_env_vars();
+    let now = chrono::Utc::now();
 
     let mut config: config::Config = match config::get_config() {
         Ok(config) => config,
         Err(_) => {
-            eprint!("Badly formatted IP_UPDATER_ZONE_NAMES\n");
+            eprint!("{} : Badly formatted IP_UPDATER_ZONE_NAMES\n", now);
             process::exit(1);
         }
     };
@@ -24,7 +28,7 @@ fn main() {
     let current_external_ip_address = match ip_finder::get_ip_address() {
         Ok(ip_address) => ip_address,
         Err(error_message) => {
-            eprint!("{}\n", error_message);
+            eprint!("{} : {}\n", now, error_message);
             process::exit(1);
         }
     };
@@ -36,7 +40,8 @@ fn main() {
     for domain in config.domains.into_iter() {
         if vec![current_external_ip_address] == domain.ip_addresses {
             print!(
-                "A records for {} up to date with current external IP address: {}.\n",
+                "{} : A records for {} up to date with current external IP address: {}.\n",
+                now,
                 domain.domain_name,
                 current_external_ip_address.to_string()
             );
@@ -52,13 +57,14 @@ fn main() {
         ) {
             Ok(_) => {
                 print!(
-                    "A records for {} updated to current external IP address {}.\n",
+                    "{} : A records for {} updated to current external IP address {}.\n",
+                    now,
                     domain.domain_name,
                     current_external_ip_address.to_string(),
                 )
             },
             Err(error_message) => {
-                eprint!("{}\n", error_message);
+                eprint!("{}: {}\n", now, error_message);
                 process::exit(1);
             }
         };
