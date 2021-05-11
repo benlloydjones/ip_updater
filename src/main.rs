@@ -4,26 +4,19 @@ extern crate rusoto_core;
 extern crate rusoto_credential;
 extern crate rusoto_route53;
 
+mod config;
 mod ip_finder;
-mod route53_interface;
+pub mod route53_interface;
 
-use std::env;
 use std::process;
 
 fn main() {
     openssl_probe::init_ssl_cert_env_vars();
 
-    let hosted_zone_id = match env::var("IP_UPDATER_HOSTED_ZONE_ID") {
-        Ok(id) => id,
+    let mut config: config::Config = match config::get_config() {
+        Ok(config) => config,
         Err(_) => {
-            eprintln!("Couldn't get hosted zone id");
-            process::exit(1);
-        },
-    };
-    let name = match env::var("IP_UPDATER_DOMAIN_NAME") {
-        Ok(name) => name,
-        Err(_) => {
-            eprintln!("Couldn't get domain name");
+            eprint!("Badly formatted IP_UPDATER_ZONE_NAMES\n");
             process::exit(1);
         }
     };
@@ -31,41 +24,44 @@ fn main() {
     let current_external_ip_address = match ip_finder::get_ip_address() {
         Ok(ip_address) => ip_address,
         Err(error_message) => {
-            eprintln!("{}", error_message);
+            eprint!("{}\n", error_message);
             process::exit(1);
         }
     };
 
     let client = route53_interface::get_route_53_client();
 
-    let current_a_records = match route53_interface::get_current_a_record(&client, &hosted_zone_id) {
-        Ok(addresses) => addresses,
-        Err(error_message) => {
-            eprintln!("{}", error_message);
-            process::exit(1);
-        }
-    };
+    config = route53_interface::get_a_records_for_domains(&client, config);
 
-    if vec![current_external_ip_address] == current_a_records {
-        println!(
-            "A records up to date with current external IP address: {}.",
-            current_external_ip_address.to_string()
-        );
-        process::exit(0);
+    for domain in config.domains.into_iter() {
+        if vec![current_external_ip_address] == domain.ip_addresses {
+            print!(
+                "A records for {} up to date with current external IP address: {}.\n",
+                domain.domain_name,
+                current_external_ip_address.to_string()
+            );
+            continue;
+        }
+        
+        match route53_interface::update_a_records_on_route53(
+            &client,
+            current_external_ip_address,
+            domain.ip_addresses[0],
+            &domain.hosted_zone_id,
+            &domain.domain_name,
+        ) {
+            Ok(_) => {
+                print!(
+                    "A records for {} updated to current external IP address {}.\n",
+                    domain.domain_name,
+                    current_external_ip_address.to_string(),
+                )
+            },
+            Err(error_message) => {
+                eprint!("{}\n", error_message);
+                process::exit(1);
+            }
+        };
     }
-
-    match route53_interface::update_a_records_on_route53(
-        &client,
-        current_external_ip_address,
-        current_a_records[0],
-        &hosted_zone_id,
-        &name,
-    ) {
-        Ok(_) => println!("Update complete."),
-        Err(error_message) => {
-            eprintln!("{}", error_message);
-            process::exit(1);
-        }
-    };
     process::exit(0);
 }

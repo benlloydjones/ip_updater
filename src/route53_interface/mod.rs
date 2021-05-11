@@ -6,9 +6,7 @@ use rusoto_route53::{
 };
 use std::error::Error;
 use std::net::Ipv4Addr;
-
-#[path = "ip_finder.rs"]
-mod ip_finder;
+use std::process;
 
 enum RecordUpdateKind {
     CREATE,
@@ -38,7 +36,7 @@ fn get_current_a_record_addresses(
             Some(resource_records) => {
                 for resource_record in resource_records.iter() {
                     let record_as_ipv4_enum =
-                        ip_finder::string_to_ipv4(resource_record.value.clone())?;
+                        super::ip_finder::string_to_ipv4(resource_record.value.clone())?;
                     current_a_records.push(record_as_ipv4_enum);
                 }
             }
@@ -119,4 +117,18 @@ pub async fn update_a_records_on_route53(
         get_update_a_record_request(new_ip_address, RecordUpdateKind::CREATE, hosted_zone_id, name)?;
     Route53Client::change_resource_record_sets(client, create_a_record_request).await?;
     Ok(())
+}
+
+pub fn get_a_records_for_domains(client: &Route53Client, config: super::config::Config) -> super::config::Config {
+    let new_domains = config.domains.into_iter().map(|domain| {
+        let ip_addresses = match get_current_a_record(&client, &domain.hosted_zone_id) {
+            Ok(addresses) => addresses,
+            Err(error_message) => {
+                eprintln!("{}", error_message);
+                process::exit(1);
+            }
+        };
+        super::config::Domain{ hosted_zone_id: domain.hosted_zone_id, domain_name: domain.domain_name, ip_addresses: ip_addresses }
+    }).collect();
+    super::config::Config{ domains: new_domains }
 }
